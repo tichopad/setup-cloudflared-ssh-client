@@ -1,0 +1,43 @@
+name: Setup cloudflared SSH client
+
+description: Sets up everything required to connect to an SSH server exposed via Cloudflare Tunnel from inside of a runner
+
+inputs:
+  hostname:
+    description: The hostname of the server behind the Cloudflare Tunnel
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    - name: Add Cloudflare's package signing key
+      shell: bash
+      run: |
+        mkdir -p --mode=0755 /usr/share/keyrings
+        curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+
+    - name: Add Cloudflare's package repository
+      shell: bash
+      run: |
+        echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
+
+    - name: Install cloudflared
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install cloudflared
+
+    - name: Make sure the SSH directory exists
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+
+    - name: Tweak the SSH config to setup cloudflared proxy
+      shell: bash
+      run: |
+        touch ~/.ssh/config
+        echo "Host ${{ inputs.hostname }}" >> ~/.ssh/config
+        echo "  ProxyCommand /usr/bin/cloudflared access ssh --hostname %h" >> ~/.ssh/config
+        chmod 600 ~/.ssh/config
